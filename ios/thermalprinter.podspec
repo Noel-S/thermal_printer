@@ -6,10 +6,10 @@ Pod::Spec.new do |s|
   s.name             = 'thermalprinter'
   s.version          = '0.0.1'
   s.summary          = 'A new Flutter plugin project.'
-  s.description      = <<-DESC A new Flutter plugin project. DESC
+  s.description      = 'A Flutter plugin to print on thermal printers using the ESC/POS protocol.'
   s.homepage         = 'https://noel-s.com/porfolio/flutter/thermalprinter'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Noel Silva' => 'hola@noel-s.com' }
+  s.author           = { 'Noel Silva' => 'reach@noels.dev' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
