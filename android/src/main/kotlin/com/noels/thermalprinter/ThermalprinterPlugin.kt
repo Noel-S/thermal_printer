@@ -17,10 +17,18 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.EventChannel.StreamHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.InputStream
 import java.util.UUID
+import kotlin.coroutines.CoroutineContext
 
 /** ThermalprinterPlugin */
-class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
+class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, CoroutineScope {
+    private lateinit var job: Job
   private val serialUUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
 
   private lateinit var channel : MethodChannel
@@ -31,8 +39,12 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
 //  var usbScanSink: EventChannel.EventSink? = null
   var bluetoothDevicesHash : HashMap<String, BluetoothSocket> = HashMap()
 
+    override val coroutineContext: CoroutineContext
+        get() = Dispatchers.Main + job
+
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+      job = Job()
     bluetoothManager = flutterPluginBinding.applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "thermalprinter_channel")
     channel.setMethodCallHandler(this)
@@ -59,6 +71,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
   }
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+      job.cancel()
       channel.setMethodCallHandler(null)
       eventChannel.setStreamHandler(null)
   }
@@ -75,12 +88,12 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
         result.success(bluetoothManager.adapter?.isEnabled)
   }
 
-  private fun printBluetooth(address: String, data: ByteArray, result: Result) {
+  private fun printBluetooth(address: String, data: ByteArray, result: Result)  = launch(Dispatchers.IO) {
 //    Log.d("METHOD_CHANNEL", "_print: ${data.size}")
     if (bluetoothManager.adapter == null) {
         Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
         result.success(false)
-        return
+        throw Exception("The current device doesn't support bluetooth connectivity.")
     }
       var socket: BluetoothSocket? = bluetoothDevicesHash[address]
       if (socket == null) {
@@ -89,53 +102,62 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
         bluetoothDevicesHash[address] = socket
       }
 
-      Thread {
         try {
             //closeSocketConnection(socket!)
             socket!!.connect()
             val byteArray = byteArrayOf(0x1B, 0x40)
             socket.outputStream?.write(byteArray, 0, byteArray.size)
             // Now, instead of sleeping, listen for acknowledgment
-            var inputStream = socket.inputStream
-            var buffer = ByteArray(1024) // Adjust size as necessary
-            var numBytes: Int // Number of bytes returned from read()
-            // This is a simplified loop to read data. Adapt based on your protocol.
-            while (true) {
-                numBytes = inputStream.read(buffer)
-                val readMessage = String(buffer, 0, numBytes)
-                Log.d("DATA_RETURNED", readMessage)
-                io.flutter.Log()
-                if (readMessage.contains("OK")) { // Example condition, replace with actual acknowledgment handling
-                    break // Exit loop once acknowledgment is received
-                }
+            val acknowledgment = readAcknowledgment(socket.inputStream)
+            if (!acknowledgment) {
+                throw Exception("No acknowledgment received")
             }
             socket.outputStream.write(data, 0, data.size)
-
-             inputStream = socket.inputStream
-             buffer = ByteArray(1024) // Adjust size as necessary
-            // This is a simplified loop to read data. Adapt based on your protocol.
-            while (true) {
-                numBytes = inputStream.read(buffer)
-                val readMessage = String(buffer, 0, numBytes)
-                Log.d("DATA_RETURNED", readMessage)
-                io.flutter.Log()
-                if (readMessage.contains("OK")) { // Example condition, replace with actual acknowledgment handling
-                    break // Exit loop once acknowledgment is received
-                }
+            val printAcknowledgment = readAcknowledgment(socket.inputStream)
+            if (!printAcknowledgment) {
+                throw Exception("Print job not acknowledged")
             }
 
-//            Thread.sleep(1000)
-//            closeSocketConnection(socket)
-
-//            closeSocketConnection(socket)
             Thread.sleep(1500)
-            result.success(true)
+//            result.success(true)
+            withContext(Dispatchers.Main) {
+                result.success(true)
+            }
         } catch (e: Exception) {
-            result.success(false)
-            result.error("EXCEPTION", e.message, e.localizedMessage)
+            withContext(Dispatchers.Main) {
+                result.success(false)
+            }
+//            result.error("EXCEPTION", e.message, e.localizedMessage)
         }
-    }.start()
   }
+
+
+
+    private fun readAcknowledgment(inputStream: InputStream):Boolean {
+        val buffer = ByteArray(1024) // Buffer for storing incoming bytes
+        var attempts = 0
+        val maxAttempts = 10 // For example, wait for up to 10 iterations
+
+        var done = false
+        while (!done && attempts < maxAttempts) {
+            if (inputStream.available() > 0) {
+                val numBytes = inputStream.read(buffer)
+                val readMessage = String(buffer, 0, numBytes)
+                // Log or process the readMessage here. For now, just log it.
+                Log.d("BLUETOOTH_PRINTER", "Received: $readMessage")
+                done = true // Adjust this based on your criteria
+            } else {
+                Thread.sleep(500) // Wait half a second before trying again
+                attempts++
+            }
+        }
+
+        if (attempts >= maxAttempts) {
+            Log.e("BLUETOOTH_PRINTER", "No response received within the expected timeframe.")
+            return false // Placeholder
+        }
+        return true // Placeholder
+    }
 
     private fun connectBluetooth(address: String, result: Result) {
 //    Log.d("METHOD_CHANNEL", "_print: ${data.size}")
