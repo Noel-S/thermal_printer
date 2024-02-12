@@ -105,13 +105,13 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
                     break // Exit loop once acknowledgment is received
                 }
             }
+            closeSocketConnection(socket)
+            Thread.sleep(500)
             result.success(true)
         } catch (e: Exception) {
             closeSocketConnection(socket)
 //                result.success(false)
             result.error("EXCEPTION", e.message, e.localizedMessage)
-        } finally {
-            closeSocketConnection(socket)
         }
     }.start()
   }
