@@ -13,6 +13,7 @@ class BluetoothPrinter extends Printer {
       // perform print
       final result = await Thermalprinter().printBluetooth(job.data, identifier);
       _printQueue.removeAt(0);
+      await Future.delayed(const Duration(milliseconds: 500));
       job.completer.complete(Future.value(result));
       _isPrinting = false;
       if (_printQueue.isNotEmpty) {
