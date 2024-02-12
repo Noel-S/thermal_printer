@@ -29,6 +29,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
 
   var bluetoothScanSink: EventChannel.EventSink? = null
 //  var usbScanSink: EventChannel.EventSink? = null
+  var bluetoothDevicesHash : HashMap<String, BluetoothSocket> = HashMap()
 
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -81,15 +82,19 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
         result.success(false)
         return
     }
-    val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
-    val socket: BluetoothSocket = device.createRfcommSocketToServiceRecord(serialUUID)
+      var socket: BluetoothSocket? = bluetoothDevicesHash[address]
+      if (socket == null) {
+        val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
+        socket = device.createRfcommSocketToServiceRecord(serialUUID)
+        bluetoothDevicesHash[address] = socket
+      }
 
-    Thread {
+      Thread {
         try {
-            closeSocketConnection(socket)
-            socket.connect()
+            //closeSocketConnection(socket!)
+            socket!!.connect()
             val byteArray = byteArrayOf(0x1B, 0x40)
-            socket.outputStream.write(byteArray, 0, byteArray.size)
+            socket.outputStream?.write(byteArray, 0, byteArray.size)
             // Now, instead of sleeping, listen for acknowledgment
             var inputStream = socket.inputStream
             var buffer = ByteArray(1024) // Adjust size as necessary
@@ -122,13 +127,12 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
 //            Thread.sleep(1000)
 //            closeSocketConnection(socket)
 
-            closeSocketConnection(socket)
+//            closeSocketConnection(socket)
             Thread.sleep(1500)
             result.success(true)
         } catch (e: Exception) {
-            closeSocketConnection(socket)
             result.success(false)
-//            result.error("EXCEPTION", e.message, e.localizedMessage)
+            result.error("EXCEPTION", e.message, e.localizedMessage)
         }
     }.start()
   }
