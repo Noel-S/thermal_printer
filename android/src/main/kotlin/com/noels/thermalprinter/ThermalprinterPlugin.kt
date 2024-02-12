@@ -101,17 +101,18 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
                 numBytes = inputStream.read(buffer)
                 val readMessage = String(buffer, 0, numBytes)
                 Log.d("DATA_RETURNED", readMessage)
+                io.flutter.Log()
                 if (readMessage.contains("OK")) { // Example condition, replace with actual acknowledgment handling
                     break // Exit loop once acknowledgment is received
                 }
             }
             closeSocketConnection(socket)
-            Thread.sleep(500)
+            Thread.sleep(1500)
             result.success(true)
         } catch (e: Exception) {
             closeSocketConnection(socket)
-//                result.success(false)
-            result.error("EXCEPTION", e.message, e.localizedMessage)
+            result.success(false)
+//            result.error("EXCEPTION", e.message, e.localizedMessage)
         }
     }.start()
   }
@@ -160,11 +161,13 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
   }
 
     private fun closeSocketConnection(socket: BluetoothSocket) {
-        if (socket.isConnected) {
-            socket.outputStream.flush()
-            socket.outputStream.close()
-            socket.close()
-        }
+        try {
+            if (socket.isConnected) {
+                socket.outputStream.flush()
+                socket.outputStream.close()
+                socket.close()
+            }
+        } catch (_: Exception) {}
     }
 
     private val scanCallback: ScanCallback = object : ScanCallback() {
