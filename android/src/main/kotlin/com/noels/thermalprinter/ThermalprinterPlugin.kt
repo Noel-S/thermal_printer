@@ -88,14 +88,12 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
         try {
             closeSocketConnection(socket)
             socket.connect()
-            socket.outputStream.write(data, 0, data.size)
-//            Thread.sleep(1000)
-//            closeSocketConnection(socket)
+            val byteArray = byteArrayOf(0x1B, 0x40)
+            socket.outputStream.write(byteArray, 0, byteArray.size)
             // Now, instead of sleeping, listen for acknowledgment
-            val inputStream = socket.inputStream
-            val buffer = ByteArray(1024) // Adjust size as necessary
+            var inputStream = socket.inputStream
+            var buffer = ByteArray(1024) // Adjust size as necessary
             var numBytes: Int // Number of bytes returned from read()
-
             // This is a simplified loop to read data. Adapt based on your protocol.
             while (true) {
                 numBytes = inputStream.read(buffer)
@@ -106,6 +104,24 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
                     break // Exit loop once acknowledgment is received
                 }
             }
+            socket.outputStream.write(data, 0, data.size)
+
+             inputStream = socket.inputStream
+             buffer = ByteArray(1024) // Adjust size as necessary
+            // This is a simplified loop to read data. Adapt based on your protocol.
+            while (true) {
+                numBytes = inputStream.read(buffer)
+                val readMessage = String(buffer, 0, numBytes)
+                Log.d("DATA_RETURNED", readMessage)
+                io.flutter.Log()
+                if (readMessage.contains("OK")) { // Example condition, replace with actual acknowledgment handling
+                    break // Exit loop once acknowledgment is received
+                }
+            }
+
+//            Thread.sleep(1000)
+//            closeSocketConnection(socket)
+
             closeSocketConnection(socket)
             Thread.sleep(1500)
             result.success(true)
