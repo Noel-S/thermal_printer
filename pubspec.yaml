@@ -1,6 +1,6 @@
 name: thermalprinter
 description: A new Flutter plugin project.
-version: 0.1.2
+version: 0.1.4
 homepage:
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 

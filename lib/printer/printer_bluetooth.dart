@@ -6,12 +6,15 @@ import 'package:thermalprinter/thermalprinter.dart';
 
 class BluetoothPrinter extends Printer {
   String identifier;
+  bool _isPrinting = false;
   BluetoothPrinter._internal({required this.identifier, required super.paperSize, required super.profile, required super.uuid, required super.generator}) {
     queue.stream.listen((job) async {
+      _isPrinting = true;
       // perform print
       final result = await Thermalprinter().printBluetooth(job.data, identifier);
       _printQueue.removeAt(0);
-      job.completer.complete(result);
+      job.completer.complete(Future.value(result));
+      _isPrinting = false;
       if (_printQueue.isNotEmpty) {
         queue.add(_printQueue[0]);
       } else {
@@ -36,7 +39,7 @@ class BluetoothPrinter extends Printer {
   Future<bool> send(Uint8List data) async {
     final job = PrintJob(data);
     _printQueue.add(job);
-    if (_printQueue.length == 1) {
+    if (!_isPrinting) {
       queue.add(job);
     }
     return job.completer.future;

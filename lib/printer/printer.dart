@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:esc_pos_utils/esc_pos_utils.dart';
+import 'package:uuid/v4.dart';
 
 abstract class Printer {
   final String uuid;
@@ -23,6 +24,7 @@ abstract class Printer {
 
 class PrintJob {
   final Uint8List data;
+  final String uuid = const UuidV4().generate();
   final Completer<bool> completer = Completer<bool>();
 
   PrintJob(this.data);
