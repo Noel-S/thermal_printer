@@ -9,12 +9,13 @@ class NetworkPrinter extends Printer {
   int port;
   Socket? socket;
   NetworkPrinter.required({required this.host, required this.port, required super.paperSize, required super.profile, required super.uuid, required super.generator}) {
-    queue.stream.listen((data) async {
+    queue.stream.listen((job) async {
       if (socket == null) {
         return;
       }
-      socket?.add(data);
+      socket?.add(job.data);
       await socket?.flush();
+      job.completer.complete(true);
       _printQueue.removeAt(0);
       if (_printQueue.isNotEmpty) {
         queue.add(_printQueue[0]);
@@ -35,17 +36,18 @@ class NetworkPrinter extends Printer {
     );
   }
 
-  final List<Uint8List> _printQueue = [];
+  final List<PrintJob> _printQueue = [];
   @override
   Future<bool> send(Uint8List data) async {
     if (socket == null) {
       return false;
     }
-    _printQueue.add(data);
+    final job = PrintJob(data);
+    _printQueue.add(job);
     if (_printQueue.length == 1) {
-      queue.add(data);
+      queue.add(job);
     }
-    return true;
+    return job.completer.future;
   }
 
   @override
