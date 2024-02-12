@@ -89,13 +89,29 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler {
             closeSocketConnection(socket)
             socket.connect()
             socket.outputStream.write(data, 0, data.size)
-            Thread.sleep(1000)
-            closeSocketConnection(socket)
+//            Thread.sleep(1000)
+//            closeSocketConnection(socket)
+            // Now, instead of sleeping, listen for acknowledgment
+            val inputStream = socket.inputStream
+            val buffer = ByteArray(1024) // Adjust size as necessary
+            var numBytes: Int // Number of bytes returned from read()
+
+            // This is a simplified loop to read data. Adapt based on your protocol.
+            while (true) {
+                numBytes = inputStream.read(buffer)
+                val readMessage = String(buffer, 0, numBytes)
+                Log.d("DATA_RETURNED", readMessage)
+                if (readMessage.contains("OK")) { // Example condition, replace with actual acknowledgment handling
+                    break // Exit loop once acknowledgment is received
+                }
+            }
             result.success(true)
         } catch (e: Exception) {
             closeSocketConnection(socket)
 //                result.success(false)
             result.error("EXCEPTION", e.message, e.localizedMessage)
+        } finally {
+            closeSocketConnection(socket)
         }
     }.start()
   }
