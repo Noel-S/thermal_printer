@@ -20,6 +20,7 @@ import io.flutter.plugin.common.EventChannel.StreamHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.InputStream
@@ -106,19 +107,20 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             //closeSocketConnection(socket!)
             socket!!.connect()
             val byteArray = byteArrayOf(0x1B, 0x40)
-            socket.outputStream?.write(byteArray, 0, byteArray.size)
+            socket.outputStream.write(byteArray, 0, byteArray.size)
             // Now, instead of sleeping, listen for acknowledgment
-            val acknowledgment = readAcknowledgment(socket.inputStream)
-            if (!acknowledgment) {
-                throw Exception("No acknowledgment received")
-            }
+//            val acknowledgment = readAcknowledgment(socket.inputStream)
+//            if (!acknowledgment) {
+//                throw Exception("No acknowledgment received")
+//            }
             socket.outputStream.write(data, 0, data.size)
             val printAcknowledgment = readAcknowledgment(socket.inputStream)
             if (!printAcknowledgment) {
                 throw Exception("Print job not acknowledged")
             }
 
-            Thread.sleep(1500)
+            //Thread.sleep(1500)
+            delay(2000)
 //            result.success(true)
             withContext(Dispatchers.Main) {
                 result.success(true)
@@ -133,7 +135,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
 
 
 
-    private fun readAcknowledgment(inputStream: InputStream):Boolean {
+    private suspend fun readAcknowledgment(inputStream: InputStream):Boolean {
         val buffer = ByteArray(1024) // Buffer for storing incoming bytes
         var attempts = 0
         val maxAttempts = 10 // For example, wait for up to 10 iterations
@@ -147,7 +149,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
                 Log.d("BLUETOOTH_PRINTER", "Received: $readMessage")
                 done = true // Adjust this based on your criteria
             } else {
-                Thread.sleep(500) // Wait half a second before trying again
+                delay(500)
                 attempts++
             }
         }
