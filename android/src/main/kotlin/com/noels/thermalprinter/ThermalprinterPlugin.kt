@@ -97,31 +97,36 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         result.success(false)
         return@launch
     }
-      var socket: BluetoothSocket? = bluetoothDevicesHash[address]
+    try {
+      val socket: BluetoothSocket? = bluetoothDevicesHash[address]
       if (socket == null) {
-        val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
-        socket = device.createRfcommSocketToServiceRecord(serialUUID)
-        bluetoothDevicesHash[address] = socket
+        Log.e("BLUETOOTH", "The current device is not connected.")
+        result.success(false)
+        return@launch
       }
 
-        try {
-            socket!!.connect()
-            val initCommand = byteArrayOf(0x1B, 0x40) // Reset printer
-            socket.outputStream.apply {
-                write(initCommand)
-                write(data)
-                flush()
-            }
-            val printAcknowledgment = readAcknowledgment(socket.inputStream)
-            if (!printAcknowledgment) {
-                withContext(Dispatchers.Main) { result.success(false) }
-                return@launch
-            }
-            delay(1000)
-            withContext(Dispatchers.Main) {
-                //delay(1000)
-                result.success(true)
-            }
+      if (!socket.isConnected) {
+          Log.e("BLUETOOTH", "The current device is not connected.")
+          result.success(false)
+          return@launch
+      }
+
+        val initCommand = byteArrayOf(0x1B, 0x40) // Reset printer
+        socket.outputStream.apply {
+            write(initCommand)
+            write(data)
+            flush()
+        }
+        val printAcknowledgment = readAcknowledgment(socket.inputStream)
+        if (!printAcknowledgment) {
+            withContext(Dispatchers.Main) { result.success(false) }
+            return@launch
+        }
+        delay(1000)
+        withContext(Dispatchers.Main) {
+            //delay(1000)
+            result.success(true)
+        }
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
                 result.success(false)
