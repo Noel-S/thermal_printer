@@ -128,7 +128,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             result.success(true)
         }
         } catch (e: Exception) {
-            Log.e("BLUETOOTH", e.message.orEmpty())
+            Log.e("BLUETOOTH", e.localizedMessage.orEmpty(), e)
             withContext(Dispatchers.Main) {
                 result.success(false)
             }
@@ -190,6 +190,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             }
             result.success(true)
         } catch (e: Exception) {
+            Log.e("BLUETOOTH", e.localizedMessage.orEmpty(), e)
             result.success(false)
 //            result.error("EXCEPTION", e.message, e.localizedMessage)
         }
@@ -218,6 +219,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             bluetoothDevicesHash.remove(address)
             result.success(true)
         } catch (e: Exception) {
+            Log.e("BLUETOOTH", e.localizedMessage.orEmpty(), e)
             result.success(false)
 //            result.error("EXCEPTION", e.message, e.localizedMessage)
         }
