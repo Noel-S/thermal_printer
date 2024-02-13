@@ -92,11 +92,10 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
   }
 
   private fun printBluetooth(address: String, data: ByteArray, result: Result) = launch(Dispatchers.IO) {
-//    Log.d("METHOD_CHANNEL", "_print: ${data.size}")
     if (bluetoothManager.adapter == null) {
         Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
         result.success(false)
-        throw Exception("The current device doesn't support bluetooth connectivity.")
+        return@launch
     }
       var socket: BluetoothSocket? = bluetoothDevicesHash[address]
       if (socket == null) {
@@ -106,27 +105,21 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
       }
 
         try {
-            //closeSocketConnection(socket!)
             socket!!.connect()
-            val byteArray = byteArrayOf(0x1B, 0x40)
-            socket.outputStream.write(byteArray, 0, byteArray.size)
-            // Now, instead of sleeping, listen for acknowledgment
-//            val acknowledgment = readAcknowledgment(socket.inputStream)
-//            if (!acknowledgment) {
-//                throw Exception("No acknowledgment received")
-//            }
-            socket.outputStream.write(data, 0, data.size)
-            socket.outputStream.flush()
+            val initCommand = byteArrayOf(0x1B, 0x40) // Reset printer
+            socket.outputStream.apply {
+                write(initCommand)
+                write(data)
+                flush()
+            }
             val printAcknowledgment = readAcknowledgment(socket.inputStream)
             if (!printAcknowledgment) {
-                throw Exception("Print job not acknowledged")
+                withContext(Dispatchers.Main) { result.success(false) }
+                return@launch
             }
-
-            //Thread.sleep(1500)
-            delay(2000)
-//            result.success(true)
-//            bluetoothDevicesHash.remove(address)
+            delay(1000)
             withContext(Dispatchers.Main) {
+                //delay(1000)
                 result.success(true)
             }
         } catch (e: Exception) {
@@ -194,27 +187,6 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             result.success(false)
 //            result.error("EXCEPTION", e.message, e.localizedMessage)
         }
-//        if (bluetoothManager.adapter == null) {
-//            Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
-//            result.success(false)
-//            return
-//        }
-//        val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
-//        val socket: BluetoothSocket = device.createRfcommSocketToServiceRecord(serialUUID)
-//
-//        Thread {
-//            try {
-//                closeSocketConnection(socket)
-//                socket.connect()
-//                result.success(true)
-//            } catch (e: Exception) {
-//                closeSocketConnection(socket)
-//                result.error("EXCEPTION", e.message, e.localizedMessage)
-//            } finally {
-//                Thread.sleep(700)
-//                closeSocketConnection(socket)
-//            }
-//        }.start()
     }
 
     private fun disconnectBluetooth(address: String, result: Result) {
