@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:thermalprinter/printer/device.dart';
 import 'package:thermalprinter/thermalprinter.dart';
@@ -19,7 +20,15 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void initState() {
+    _requestPermission();
     super.initState();
+  }
+
+  void _requestPermission() async {
+    await Permission.bluetooth.request();
+    await Permission.bluetoothScan.request();
+    await Permission.bluetoothConnect.request();
+    await Permission.bluetoothAdvertise.request();
   }
 
   @override
@@ -29,7 +38,7 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('Thermalprinter example'),
         ),
-        body: StreamBuilder<List<Device>>(
+        body: StreamBuilder<List<BluetoothDevice>>(
           stream: _thermalprinterPlugin.scan<BluetoothDevice>().devices,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
@@ -44,7 +53,7 @@ class _MyAppState extends State<MyApp> {
                 return ListView.builder(
                   itemCount: snapshot.data?.length ?? 0,
                   itemBuilder: (context, index) {
-                    final device = snapshot.data![index] as BluetoothDevice;
+                    final device = snapshot.data![index];
                     return ListTile(
                       title: Text(device.name),
                       subtitle: Text(device.identifier),
@@ -56,7 +65,12 @@ class _MyAppState extends State<MyApp> {
             }
           },
         ),
-        floatingActionButton: FloatingActionButton.extended(onPressed: () {}, label: const Text('Scan')),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () {
+            _thermalprinterPlugin.scan<BluetoothDevice>().start();
+          },
+          label: const Text('Scan'),
+        ),
       ),
     );
   }

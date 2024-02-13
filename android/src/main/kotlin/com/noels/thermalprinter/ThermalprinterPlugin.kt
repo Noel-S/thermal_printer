@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 
 /** ThermalprinterPlugin */
@@ -37,7 +38,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
 
   var bluetoothScanSink: EventChannel.EventSink? = null
 //  var usbScanSink: EventChannel.EventSink? = null
-  private var bluetoothDevicesHash : HashMap<String, BluetoothSocket> = HashMap()
+  private var bluetoothDevicesHash : ConcurrentHashMap<String, BluetoothSocket> = ConcurrentHashMap()
 
   override val coroutineContext: CoroutineContext
     get() = Dispatchers.Main + job
@@ -56,12 +57,13 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
     when (call.method) {
         "status" -> isEnabled(result)
         "printBluetooth" -> call.argument<String>("identifier")?.let {
-            Log.d("ENTER", "onMethodCall: SIU")
             call.argument<ByteArray>("bytes")?.let { bytes ->
               printBluetooth(it, bytes, result)
             }
         }
         "connectBluetooth" -> call.argument<String>("identifier")?.let {
+            Log.d("ENTER", "onMethodCall: ENTER")
+
             connectBluetooth(it, result)
         }
         "disconnectBluetooth" -> call.argument<String>("identifier")?.let {
@@ -91,25 +93,27 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         result.success(bluetoothManager.adapter?.isEnabled)
   }
 
+    @Synchronized
+    private fun getOrCreateSocket(address: String): BluetoothSocket {
+        return bluetoothDevicesHash.getOrPut(address) {
+            val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
+            device.createRfcommSocketToServiceRecord(serialUUID)
+        }
+    }
+
   private fun printBluetooth(address: String, data: ByteArray, result: Result) = launch(Dispatchers.IO) {
     if (bluetoothManager.adapter == null) {
-        Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
-        result.success(false)
+        withContext(Dispatchers.Main) {
+            Log.e("BLUETOOTH_PRINTER", "The current device doesn't support bluetooth connectivity.")
+            result.success(false)
+        }
         return@launch
     }
     try {
-      val socket: BluetoothSocket? = bluetoothDevicesHash[address]
-      if (socket == null) {
-        Log.e("BLUETOOTH", "The current device is not connected.")
-        result.success(false)
-        return@launch
-      }
-
-      if (!socket.isConnected) {
-          Log.e("BLUETOOTH", "The current device is not connected.")
-          result.success(false)
-          return@launch
-      }
+//      val socket = getOrCreateSocket(address);
+        val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
+        val socket = device.createRfcommSocketToServiceRecord(serialUUID)
+        socket.connect()
 
         val initCommand = byteArrayOf(0x1B, 0x40) // Reset printer
         socket.outputStream.apply {
@@ -117,23 +121,32 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             write(data)
             flush()
         }
-        val printAcknowledgment = readAcknowledgment(socket.inputStream)
-        if (!printAcknowledgment) {
-            withContext(Dispatchers.Main) { result.success(false) }
-            return@launch
-        }
+        readAcknowledgment(socket.inputStream)
+//        val printAcknowledgment = readAcknowledgment(socket.inputStream)
+//        if (!printAcknowledgment) {
+//            withContext(Dispatchers.Main) {
+//                result.success(false)
+//            }
+//            return@launch
+//        }
         delay(1000)
+        socket.outputStream.flush()
+        socket.outputStream.close()
+        socket.close()
+
+        //bluetoothDevicesHash.remove(address)
         withContext(Dispatchers.Main) {
             //delay(1000)
             result.success(true)
         }
-        } catch (e: Exception) {
-            Log.e("BLUETOOTH", e.localizedMessage.orEmpty(), e)
-            withContext(Dispatchers.Main) {
-                result.success(false)
-            }
-//            result.error("EXCEPTION", e.message, e.localizedMessage)
+    } catch (e: Exception) {
+        Log.e("BLUETOOTH_PRINTER", e.message.orEmpty(), e)
+        withContext(Dispatchers.Main) {
+            Log.e("BLUETOOTH_PRINTER", e.message.orEmpty(), e)
+            result.success(false)
         }
+        result.error("EXCEPTION", e.message, e.localizedMessage)
+    }
   }
 
 
@@ -179,13 +192,15 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
                 result.success(false)
                 throw Exception("The current device doesn't support bluetooth connectivity.")
             }
-            var socket: BluetoothSocket? = bluetoothDevicesHash[address]
-            if (socket == null) {
-                val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
-                socket = device.createRfcommSocketToServiceRecord(serialUUID)
-                bluetoothDevicesHash[address] = socket
-            }
-            if (!socket!!.isConnected) {
+//            var socket: BluetoothSocket? = bluetoothDevicesHash[address]
+//            if (socket == null) {
+//                val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
+//                socket = device.createRfcommSocketToServiceRecord(serialUUID)
+//                bluetoothDevicesHash[address] = socket
+//            }
+            val socket = getOrCreateSocket(address);
+
+            if (!socket.isConnected) {
                 socket.connect()
             }
             result.success(true)
@@ -196,6 +211,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         }
     }
 
+    @Synchronized
     private fun disconnectBluetooth(address: String, result: Result) {
         try {
             if (bluetoothManager.adapter == null) {
