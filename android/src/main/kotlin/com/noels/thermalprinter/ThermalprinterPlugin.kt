@@ -116,6 +116,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
 //                throw Exception("No acknowledgment received")
 //            }
             socket.outputStream.write(data, 0, data.size)
+            socket.outputStream.flush()
             val printAcknowledgment = readAcknowledgment(socket.inputStream)
             if (!printAcknowledgment) {
                 throw Exception("Print job not acknowledged")
@@ -232,7 +233,10 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
                 result.success(true)
                 return
             }
+            socket.outputStream.flush()
+            socket.outputStream.close()
             socket.close()
+
             bluetoothDevicesHash.remove(address)
             result.success(true)
         } catch (e: Exception) {
