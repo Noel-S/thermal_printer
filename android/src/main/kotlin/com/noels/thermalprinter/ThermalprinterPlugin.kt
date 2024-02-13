@@ -153,7 +153,9 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
                 }
                 val readMessage = String(buffer, 0, numBytes)
                 // Log or process the readMessage here. For now, just log it.
-                Log.d("BLUETOOTH_PRINTER", "Received: $readMessage")
+                withContext(Dispatchers.Main) {
+                    Log.d("BLUETOOTH_PRINTER", "Received: $readMessage")
+                }
                 done = true // Adjust this based on your criteria
             } else {
                 delay(500)
@@ -162,7 +164,9 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         }
 
         if (attempts >= maxAttempts) {
-            Log.e("BLUETOOTH_PRINTER", "No response received within the expected timeframe.")
+            withContext(Dispatchers.Main) {
+                Log.e("BLUETOOTH_PRINTER", "No response received within the expected timeframe.")
+            }
             return false // Placeholder
         }
         return true // Placeholder
