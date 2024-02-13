@@ -3,20 +3,19 @@ package com.noels.thermalprinter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
-import android.bluetooth.le.ScanSettings
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.CountDownTimer
 import android.util.Log
-
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.EventChannel.StreamHandler
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import io.flutter.plugin.common.EventChannel
-import io.flutter.plugin.common.EventChannel.StreamHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,10 +37,10 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
 
   var bluetoothScanSink: EventChannel.EventSink? = null
 //  var usbScanSink: EventChannel.EventSink? = null
-  var bluetoothDevicesHash : HashMap<String, BluetoothSocket> = HashMap()
+  private var bluetoothDevicesHash : HashMap<String, BluetoothSocket> = HashMap()
 
-    override val coroutineContext: CoroutineContext
-        get() = Dispatchers.Main + job
+  override val coroutineContext: CoroutineContext
+    get() = Dispatchers.Main + job
 
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -64,6 +63,9 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         }
         "connectBluetooth" -> call.argument<String>("identifier")?.let {
             connectBluetooth(it, result)
+        }
+        "disconnectBluetooth" -> call.argument<String>("identifier")?.let {
+            disconnectBluetooth(it, result)
         }
         else -> {
             result.notImplemented()
@@ -89,7 +91,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         result.success(bluetoothManager.adapter?.isEnabled)
   }
 
-  private fun printBluetooth(address: String, data: ByteArray, result: Result)  = launch(Dispatchers.IO) {
+  private fun printBluetooth(address: String, data: ByteArray, result: Result) = launch(Dispatchers.IO) {
 //    Log.d("METHOD_CHANNEL", "_print: ${data.size}")
     if (bluetoothManager.adapter == null) {
         Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
@@ -122,6 +124,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             //Thread.sleep(1500)
             delay(2000)
 //            result.success(true)
+//            bluetoothDevicesHash.remove(address)
             withContext(Dispatchers.Main) {
                 result.success(true)
             }
@@ -142,8 +145,12 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
 
         var done = false
         while (!done && attempts < maxAttempts) {
-            if (inputStream.available() > 0) {
-                val numBytes = inputStream.read(buffer)
+            if (withContext(Dispatchers.IO) {
+                    inputStream.available()
+                } > 0) {
+                val numBytes = withContext(Dispatchers.IO) {
+                    inputStream.read(buffer)
+                }
                 val readMessage = String(buffer, 0, numBytes)
                 // Log or process the readMessage here. For now, just log it.
                 Log.d("BLUETOOTH_PRINTER", "Received: $readMessage")
@@ -162,28 +169,72 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
     }
 
     private fun connectBluetooth(address: String, result: Result) {
-//    Log.d("METHOD_CHANNEL", "_print: ${data.size}")
-        if (bluetoothManager.adapter == null) {
-            Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
-            result.success(false)
-            return
-        }
-        val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
-        val socket: BluetoothSocket = device.createRfcommSocketToServiceRecord(serialUUID)
-
-        Thread {
-            try {
-                closeSocketConnection(socket)
-                socket.connect()
-                result.success(true)
-            } catch (e: Exception) {
-                closeSocketConnection(socket)
-                result.error("EXCEPTION", e.message, e.localizedMessage)
-            } finally {
-                Thread.sleep(700)
-                closeSocketConnection(socket)
+        try {
+            if (bluetoothManager.adapter == null) {
+                Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
+                result.success(false)
+                throw Exception("The current device doesn't support bluetooth connectivity.")
             }
-        }.start()
+            var socket: BluetoothSocket? = bluetoothDevicesHash[address]
+            if (socket == null) {
+                val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
+                socket = device.createRfcommSocketToServiceRecord(serialUUID)
+                bluetoothDevicesHash[address] = socket
+            }
+            if (!socket!!.isConnected) {
+                socket.connect()
+            }
+            result.success(true)
+        } catch (e: Exception) {
+            result.success(false)
+//            result.error("EXCEPTION", e.message, e.localizedMessage)
+        }
+//        if (bluetoothManager.adapter == null) {
+//            Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
+//            result.success(false)
+//            return
+//        }
+//        val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
+//        val socket: BluetoothSocket = device.createRfcommSocketToServiceRecord(serialUUID)
+//
+//        Thread {
+//            try {
+//                closeSocketConnection(socket)
+//                socket.connect()
+//                result.success(true)
+//            } catch (e: Exception) {
+//                closeSocketConnection(socket)
+//                result.error("EXCEPTION", e.message, e.localizedMessage)
+//            } finally {
+//                Thread.sleep(700)
+//                closeSocketConnection(socket)
+//            }
+//        }.start()
+    }
+
+    private fun disconnectBluetooth(address: String, result: Result) {
+        try {
+            if (bluetoothManager.adapter == null) {
+                Log.e("BLUETOOTH", "The current device doesn't support bluetooth connectivity.")
+                result.success(false)
+                throw Exception("The current device doesn't support bluetooth connectivity.")
+            }
+            val socket: BluetoothSocket? = bluetoothDevicesHash[address]
+            if (socket == null) {
+                result.success(true)
+                return
+            }
+            if (!socket.isConnected) {
+                result.success(true)
+                return
+            }
+            socket.close()
+            bluetoothDevicesHash.remove(address)
+            result.success(true)
+        } catch (e: Exception) {
+            result.success(false)
+//            result.error("EXCEPTION", e.message, e.localizedMessage)
+        }
     }
 
   override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {

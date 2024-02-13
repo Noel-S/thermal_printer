@@ -64,4 +64,10 @@ class MethodChannelThermalprinter extends ThermalprinterPlatform {
     final result = await methodChannel.invokeMethod<bool>('connectBluetooth', {'identifier': identifier});
     return result ?? false;
   }
+
+  @override
+  Future<bool> disconnectBluetooth(String identifier) async {
+    final result = await methodChannel.invokeMethod<bool>('disconnectBluetooth', {'identifier': identifier});
+    return result ?? false;
+  }
 }

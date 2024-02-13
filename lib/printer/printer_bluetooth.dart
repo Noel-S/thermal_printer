@@ -48,14 +48,12 @@ class BluetoothPrinter extends Printer {
 
   @override
   Future<bool> connect() {
-    // TODO: implement connect
-    throw UnimplementedError();
+    return Thermalprinter().connectBluetooth(identifier);
   }
 
   @override
   Future<bool> disconnect() {
-    // TODO: implement disconnect
-    throw UnimplementedError();
+    return Thermalprinter().disconnectBluetooth(identifier);
   }
 
   @override
