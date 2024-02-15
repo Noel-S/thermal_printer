@@ -140,12 +140,12 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             result.success(true)
         }
     } catch (e: Exception) {
-        Log.e("BLUETOOTH_PRINTER", e.message.orEmpty(), e)
+        Log.e("BLUETOOTH_PRINTER", e.message.orEmpty())
         withContext(Dispatchers.Main) {
-            Log.e("BLUETOOTH_PRINTER", e.message.orEmpty(), e)
+            //Log.e("BLUETOOTH_PRINTER", e.message.orEmpty())
             result.success(false)
         }
-        result.error("EXCEPTION", e.message, e.localizedMessage)
+        // result.error("EXCEPTION", e.message, e.localizedMessage)
     }
   }
 
