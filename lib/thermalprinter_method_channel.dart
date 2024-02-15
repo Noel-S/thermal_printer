@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:rxdart/rxdart.dart';
 import 'package:thermalprinter/printer/device.dart';
 
 import 'thermalprinter_platform_interface.dart';
@@ -42,10 +40,11 @@ class MethodChannelThermalprinter extends ThermalprinterPlatform {
   void _startBluetoothScan(Duration timeout) {
     _currentBluetoothDevices.clear();
     _bluetoothScanSubscription?.cancel();
-    _bluetoothScanSubscription = eventChannel.receiveBroadcastStream({'method': 'scan', 'timeout': timeout.inMilliseconds, 'type': 'bluetooth'}).doOnError((p0, p1) {
-      _bluetoothScanSubscription?.cancel();
-      log('Error: $p0, $p1');
-    }).listen((event) {
+    // .doOnError((p0, p1) {
+    //   _bluetoothScanSubscription?.cancel();
+    //   log('Error: $p0, $p1');
+    // })
+    _bluetoothScanSubscription = eventChannel.receiveBroadcastStream({'method': 'scan', 'timeout': timeout.inMilliseconds, 'type': 'bluetooth'}).listen((event) {
       if (!_currentBluetoothDevices.containsKey(event["identifier"])) {
         _currentBluetoothDevices[event["identifier"]] = BluetoothDevice.fromMap(event);
         _bluetoothDevicesStreamController.add(_currentBluetoothDevices.values.toList());

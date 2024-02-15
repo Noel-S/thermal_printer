@@ -129,7 +129,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
 //            }
 //            return@launch
 //        }
-        delay(1000)
+        delay(600)
         socket.outputStream.flush()
         socket.outputStream.close()
         socket.close()
@@ -171,7 +171,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
                 }
                 done = true // Adjust this based on your criteria
             } else {
-                delay(500)
+                delay(300)
                 attempts++
             }
         }
