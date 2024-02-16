@@ -48,4 +48,8 @@ abstract class ThermalprinterPlatform extends PlatformInterface {
   Future<bool> disconnectBluetooth(String identifier) {
     throw UnimplementedError('connectBluetooth() has not been implemented.');
   }
+
+  Future<bool> get isBluetoothEnabled {
+    throw UnimplementedError('isBluetoothEnabled() has not been implemented.');
+  }
 }

@@ -24,4 +24,8 @@ class Thermalprinter {
   Future<bool> disconnectBluetooth(String identifier) async {
     return ThermalprinterPlatform.instance.disconnectBluetooth(identifier);
   }
+
+  Future<bool> get isBluetoothEnabled {
+    return ThermalprinterPlatform.instance.isBluetoothEnabled;
+  }
 }
