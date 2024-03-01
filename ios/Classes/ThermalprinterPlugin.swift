@@ -144,8 +144,12 @@ public class ThermalprinterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
             case "status":
                 self._isEnabled(result: result)
             case "printBluetooth":
-                let data = args?["bytes"] as! NSMutableArray
-                self._printBluetooth(identifier: args?["identifier"] as! String, data: data.map { $0 as! UInt8 }, result: result)
+                if let data = args?["bytes"] as? FlutterStandardTypedData {
+                    let byteArray = [UInt8](data.data)
+                    self._printBluetooth(identifier: args?["identifier"] as! String, data: byteArray, result: result)
+                } else {
+                    result(false)
+                }
 //            case "connectBluetooth":
 //                if let identifier = call.argument<String>("identifier") {
 //                    connectBluetooth(identifier, result)
