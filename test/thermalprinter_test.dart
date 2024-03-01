@@ -28,6 +28,16 @@ class MockThermalprinterPlatform with MockPlatformInterfaceMixin implements Ther
     // TODO: implement scan
     throw UnimplementedError();
   }
+
+  @override
+  Future<bool> disconnectBluetooth(String identifier) {
+    // TODO: implement disconnectBluetooth
+    throw UnimplementedError();
+  }
+
+  @override
+  // TODO: implement isBluetoothEnabled
+  Future<bool> get isBluetoothEnabled => throw UnimplementedError();
 }
 
 void main() {
