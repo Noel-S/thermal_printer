@@ -5,8 +5,8 @@ import CoreBluetooth
 public class ThermalprinterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CBCentralManagerDelegate, CBPeripheralDelegate {
     let serviceUUID = CBUUID(string: "E7810A71-73AE-499D-8C15-FAA9AEF0C3F2")
     let characteristicCBUUID = CBUUID(string: "BEF8D6C9-9C21-4C9E-B632-BD58C1009F9F")
-    var centralManager: CBCentralManager!
-    var printerPeripheral: CBPeripheral!
+    var centralManager: CBCentralManager?
+    var printerPeripheral: CBPeripheral?
     var bytes: [UInt8] = []
     var scanSink: FlutterEventSink?
     
@@ -59,7 +59,7 @@ public class ThermalprinterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
               peripheral.writeValue(data, for: characteristic, type: CBCharacteristicWriteType.withResponse)
               DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
                   if (peripheral.state != .disconnected) {
-                      self.centralManager.cancelPeripheralConnection(peripheral)
+                      self.centralManager?.cancelPeripheralConnection(peripheral)
                   }
               }
           }).start()
@@ -81,34 +81,59 @@ public class ThermalprinterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
     }
     
     func _printBluetooth(identifier: String, data:[UInt8], result: FlutterResult) {
-        let res: Bool = true
         bytes = data
+        if centralManager == nil {
+            result(false)
+            return
+        }
+        printerPeripheral = centralManager!.retrievePeripherals(withIdentifiers: [UUID(uuidString: identifier)!]).first
+        if printerPeripheral == nil {
+            result(false)
+            return
+        }
         
-        printerPeripheral = centralManager.retrievePeripherals(withIdentifiers: [UUID(uuidString: identifier)!]).first
-        printerPeripheral.delegate = self
-        centralManager.connect(printerPeripheral)
-        result(res)
+        printerPeripheral!.delegate = self
+        centralManager!.connect(printerPeripheral!)
+        result(true)
     }
         
     func _isEnabled(result: FlutterResult) {
-        result(centralManager.state == .poweredOn)
+        result(centralManager?.state == .poweredOn)
     }
     
     func _scanBluetooth(time: Int) {
-        if centralManager.state == .poweredOn {
-            centralManager.scanForPeripherals(withServices: [serviceUUID])
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-                self.centralManager.stopScan()
-                self.scanSink?(FlutterEndOfEventStream)
-                self.scanSink = nil
-            }
+        if centralManager == nil {
+            return
+        }
+        if centralManager!.state != .poweredOn {
+            return
+        }
+        centralManager!.scanForPeripherals(withServices: [serviceUUID])
+        DispatchQueue.main.asyncAfter(deadline: .now() + (Double(time)/1000.0)) {
+            self.centralManager!.stopScan()
+            self.scanSink?(FlutterEndOfEventStream)
+            self.scanSink = nil
         }
     }
+    
+//    init(centralManager: CBCentralManager? = nil, printerPeripheral: CBPeripheral? = nil, bytes: [UInt8] = [], scanSink: FlutterEventSink? = nil) {
+//        self.centralManager = CBCentralManager(delegate: self, queue: nil)
+//        self.printerPeripheral = printerPeripheral
+//        self.bytes = bytes
+//        self.scanSink = scanSink
+//    }
+    
+    override init() {
+        super.init()
+        centralManager = CBCentralManager(delegate: self, queue: nil)
+    }
+    
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "thermalprinter_channel", binaryMessenger: registrar.messenger())
         let eventChannel = FlutterEventChannel(name: "thermalprinter", binaryMessenger: registrar.messenger())
         let instance = ThermalprinterPlugin()
+        
         registrar.addMethodCallDelegate(instance, channel: channel)
         eventChannel.setStreamHandler(instance)
     }
