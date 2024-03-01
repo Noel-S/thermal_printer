@@ -106,8 +106,8 @@ public class ThermalprinterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
     }
     
     public static func register(with registrar: FlutterPluginRegistrar) {
-        let channel = FlutterMethodChannel(name: "thermalprinter", binaryMessenger: registrar.messenger())
-        let eventChannel = FlutterEventChannel(name: "thermalprinter_channel", binaryMessenger: registrar.messenger())
+        let channel = FlutterMethodChannel(name: "thermalprinter_channel", binaryMessenger: registrar.messenger())
+        let eventChannel = FlutterEventChannel(name: "thermalprinter", binaryMessenger: registrar.messenger())
         let instance = ThermalprinterPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
         eventChannel.setStreamHandler(instance)
