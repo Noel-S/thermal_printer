@@ -58,7 +58,9 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         "status" -> isEnabled(result)
         "printBluetooth" -> call.argument<String>("identifier")?.let {
             call.argument<ByteArray>("bytes")?.let { bytes ->
-              printBluetooth(it, bytes, result)
+              Thread {
+                  printBluetooth(it, bytes, result)
+              }.start()
             }
         }
         "connectBluetooth" -> call.argument<String>("identifier")?.let {
