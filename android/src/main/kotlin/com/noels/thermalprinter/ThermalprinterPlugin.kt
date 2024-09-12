@@ -6,9 +6,13 @@ import android.bluetooth.BluetoothSocket
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.CountDownTimer
 import android.util.Log
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.EventChannel.StreamHandler
@@ -27,8 +31,10 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 
+
 /** ThermalprinterPlugin */
 class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, CoroutineScope {
+    private lateinit var context: Context
     private lateinit var job: Job
   private val serialUUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
 
@@ -46,6 +52,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
       job = Job()
+      context = flutterPluginBinding.applicationContext
     bluetoothManager = flutterPluginBinding.applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "thermalprinter_channel")
     channel.setMethodCallHandler(this)
@@ -283,9 +290,34 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         }
     }
 
+    // BroadcastReceiver for Bluetooth Classic devices
+    private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val action = intent.action
+            if (BluetoothDevice.ACTION_FOUND == action) {
+                // Get Bluetooth Classic device details
+                val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                if (device != null) {
+                    if (device.name != null) {
+                        val deviceMap: MutableMap<String, Any> = HashMap()
+                        deviceMap["identifier"] = device.address
+                        deviceMap["name"] = device.name
+                        deviceMap["type"] = device.type
+                        bluetoothScanSink?.success(deviceMap)
+                    }
+                }
+            }
+        }
+    }
+
   private fun scanBluetooth(time: Long) {
         // 0:lowPower 1:balanced 2:lowLatency -1:opportunistic
         val settings: ScanSettings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        bluetoothManager.adapter.startDiscovery()
+
+        // Register BroadcastReceiver for Bluetooth Classic devices
+        val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
+        context.registerReceiver(receiver, filter)
         bluetoothManager.adapter.bluetoothLeScanner.startScan(null, settings, scanCallback)
         val timer = object: CountDownTimer(time, 1000) {
             override fun onTick(millisUntilFinished: Long) {}
@@ -293,6 +325,7 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
             override fun onFinish() {
                 bluetoothManager.adapter.bluetoothLeScanner.stopScan(scanCallback)
                 bluetoothScanSink?.endOfStream()
+                context.unregisterReceiver(receiver)
             }
         }
         timer.start()
