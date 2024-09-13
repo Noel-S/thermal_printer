@@ -44,25 +44,19 @@ class _MyAppState extends State<MyApp> {
             if (snapshot.hasError) {
               return Text('Error: ${snapshot.error}');
             }
-            switch (snapshot.connectionState) {
-              case ConnectionState.none:
-                return const Text('None');
-              case ConnectionState.waiting:
-                return const Text('Waiting');
-              case ConnectionState.active:
-                return ListView.builder(
-                  itemCount: snapshot.data?.length ?? 0,
-                  itemBuilder: (context, index) {
-                    final device = snapshot.data![index];
-                    return ListTile(
-                      title: Text(device.name),
-                      subtitle: Text(device.identifier),
-                    );
-                  },
-                );
-              case ConnectionState.done:
-                return const Text('Done');
+            if (snapshot.data != null) {
+              return ListView.builder(
+                itemCount: snapshot.data?.length ?? 0,
+                itemBuilder: (context, index) {
+                  final device = snapshot.data![index];
+                  return ListTile(
+                    title: Text(device.name),
+                    subtitle: Text(device.identifier),
+                  );
+                },
+              );
             }
+            return const Center(child: CircularProgressIndicator());
           },
         ),
         floatingActionButton: FloatingActionButton.extended(
