@@ -108,7 +108,7 @@ public class ThermalprinterPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
         if centralManager!.state != .poweredOn {
             return
         }
-        centralManager!.scanForPeripherals(withServices: [serviceUUID])
+        centralManager!.scanForPeripherals(withServices: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + (Double(time)/1000.0)) {
             self.centralManager!.stopScan()
             self.scanSink?(FlutterEndOfEventStream)
