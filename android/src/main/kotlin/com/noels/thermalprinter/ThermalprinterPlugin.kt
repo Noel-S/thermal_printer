@@ -46,6 +46,9 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
 //  var usbScanSink: EventChannel.EventSink? = null
   private var bluetoothDevicesHash : ConcurrentHashMap<String, BluetoothSocket> = ConcurrentHashMap()
 
+  private var activeScanTimer: CountDownTimer? = null
+  private var isReceiverCurrentlyRegistered = false
+
   override val coroutineContext: CoroutineContext
     get() = Dispatchers.Main + job
 
@@ -251,43 +254,121 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
     }
 
   override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        val args: Map<*, *> = arguments as Map<*, *> // {'method': 'scan', 'timeout': timeout, 'type': type.name}
-//        print(arguments)
-//        events?.success(arguments)
-        val timeout: Long = (args["timeout"] as Number).toLong()
-        if (args["method"] == "scan") {
-            bluetoothScanSink?.endOfStream()
+        val args = arguments as? Map<*, *>
+        if (args == null) {
+            events?.error("INVALID_ARGUMENTS", "Arguments are null or not a map", null)
+            events?.endOfStream()
+            return
+        }
+
+        val method = args["method"] as? String
+        if (method == "scan") {
+            if (bluetoothScanSink != null && bluetoothScanSink != events) {
+                 bluetoothScanSink?.endOfStream()
+            }
+
             bluetoothScanSink = events
+            val timeout: Long = (args["timeout"] as? Number)?.toLong() ?: 10000L
             scanBluetooth(timeout)
+        } else {
+            events?.error("UNKNOWN_METHOD", "Unknown method in onListen: $method", null)
+            events?.endOfStream()
         }
     }
 
   override fun onCancel(arguments: Any?) {
-      bluetoothScanSink?.success(arguments)
+      stopBluetoothScan()
       bluetoothScanSink?.endOfStream()
-      print(arguments)
+      bluetoothScanSink = null
   }
 
-    private fun closeSocketConnection(socket: BluetoothSocket) {
+    private fun stopBluetoothScan() {
         try {
-            if (socket.isConnected) {
-                socket.outputStream.flush()
-                socket.outputStream.close()
-                socket.close()
+            if (bluetoothManager.adapter?.isEnabled == true) {
+                 bluetoothManager.adapter.bluetoothLeScanner?.stopScan(scanCallback)
             }
-        } catch (_: Exception) {}
-    }
+        } catch (e: SecurityException) {
+            Log.e("ThermalprinterPlugin", "SecurityException stopping BLE scan: ${e.message}")
+        } catch (e: IllegalStateException) {
+            Log.e("ThermalprinterPlugin", "IllegalStateException stopping BLE scan (Bluetooth likely off): ${e.message}")
+        } catch (e: Exception) {
+            Log.e("ThermalprinterPlugin", "Exception stopping BLE scan: ${e.message}")
+        }
 
-    private val scanCallback: ScanCallback = object : ScanCallback() {
-        override fun onScanResult(callbackType: Int, result: ScanResult) {
-            if (result.device.name != null) {
-                val device: MutableMap<String, Any> = HashMap()
-                device["identifier"] = result.device.address
-                device["name"] = result.device.name
-                device["type"] = result.device.type
-                bluetoothScanSink?.success(device)
+        try {
+            if (bluetoothManager.adapter?.isDiscovering == true) {
+                bluetoothManager.adapter.cancelDiscovery()
+            }
+        } catch (e: SecurityException) {
+            Log.e("ThermalprinterPlugin", "SecurityException stopping classic discovery: ${e.message}")
+        } catch (e: Exception) {
+            Log.e("ThermalprinterPlugin", "Exception stopping classic discovery: ${e.message}")
+        }
+
+        if (isReceiverCurrentlyRegistered) {
+            try {
+                context.unregisterReceiver(receiver)
+                isReceiverCurrentlyRegistered = false
+            } catch (e: IllegalArgumentException) {
+                Log.w("ThermalprinterPlugin", "Receiver not registered or already unregistered: ${e.message}")
+            } catch (e: Exception) {
+                Log.e("ThermalprinterPlugin", "Exception unregistering receiver: ${e.message}")
             }
         }
+
+        activeScanTimer?.cancel()
+        activeScanTimer = null
+    }
+
+    private fun scanBluetooth(time: Long) {
+        if (bluetoothManager.adapter == null || !bluetoothManager.adapter.isEnabled) {
+            bluetoothScanSink?.error("BLUETOOTH_UNAVAILABLE", "Bluetooth is not available or not enabled.", null)
+            bluetoothScanSink?.endOfStream()
+            bluetoothScanSink = null
+            return
+        }
+
+        stopBluetoothScan()
+
+        val settings: ScanSettings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+
+        try {
+            if (!bluetoothManager.adapter.startDiscovery()) {
+                 Log.w("ThermalprinterPlugin", "startDiscovery() returned false. Classic scan might not start.")
+            }
+
+            val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
+            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            isReceiverCurrentlyRegistered = true
+
+            bluetoothManager.adapter.bluetoothLeScanner?.startScan(null, settings, scanCallback)
+             ?: Log.e("ThermalprinterPlugin", "bluetoothLeScanner is null, BLE scan not started.")
+
+        } catch (e: SecurityException) {
+            Log.e("ThermalprinterPlugin", "SecurityException starting scan: ${e.message}")
+            bluetoothScanSink?.error("SCAN_PERMISSION_ERROR", "Bluetooth permission missing for scan.", e.localizedMessage)
+            stopBluetoothScan()
+            bluetoothScanSink?.endOfStream()
+            bluetoothScanSink = null
+            return
+        } catch (e: Exception) {
+            Log.e("ThermalprinterPlugin", "Exception starting scan: ${e.message}")
+            bluetoothScanSink?.error("SCAN_START_ERROR", "Failed to start Bluetooth scan.", e.localizedMessage)
+            stopBluetoothScan()
+            bluetoothScanSink?.endOfStream()
+            bluetoothScanSink = null
+            return
+        }
+
+        activeScanTimer = object: CountDownTimer(time, 1000) {
+            override fun onTick(millisUntilFinished: Long) {}
+
+            override fun onFinish() {
+                stopBluetoothScan()
+                bluetoothScanSink?.endOfStream()
+                bluetoothScanSink = null
+            }
+        }.start()
     }
 
     // BroadcastReceiver for Bluetooth Classic devices
@@ -295,39 +376,27 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         override fun onReceive(context: Context, intent: Intent) {
             val action = intent.action
             if (BluetoothDevice.ACTION_FOUND == action) {
-                // Get Bluetooth Classic device details
                 val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                if (device != null) {
-                    if (device.name != null) {
-                        val deviceMap: MutableMap<String, Any> = HashMap()
-                        deviceMap["identifier"] = device.address
-                        deviceMap["name"] = device.name
-                        deviceMap["type"] = device.type
-                        bluetoothScanSink?.success(deviceMap)
-                    }
+                if (bluetoothScanSink != null && device?.name != null) {
+                    val deviceMap: MutableMap<String, Any> = HashMap()
+                    deviceMap["identifier"] = device.address
+                    deviceMap["name"] = device.name
+                    deviceMap["type"] = device.type
+                    bluetoothScanSink?.success(deviceMap)
                 }
             }
         }
     }
 
-  private fun scanBluetooth(time: Long) {
-        // 0:lowPower 1:balanced 2:lowLatency -1:opportunistic
-        val settings: ScanSettings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        bluetoothManager.adapter.startDiscovery()
-
-        // Register BroadcastReceiver for Bluetooth Classic devices
-        val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
-        context.registerReceiver(receiver, filter)
-        bluetoothManager.adapter.bluetoothLeScanner.startScan(null, settings, scanCallback)
-        val timer = object: CountDownTimer(time, 1000) {
-            override fun onTick(millisUntilFinished: Long) {}
-
-            override fun onFinish() {
-                bluetoothManager.adapter.bluetoothLeScanner.stopScan(scanCallback)
-                bluetoothScanSink?.endOfStream()
-                context.unregisterReceiver(receiver)
+    private val scanCallback: ScanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult) {
+            if (bluetoothScanSink != null && result.device?.name != null) {
+                val deviceMap: MutableMap<String, Any> = HashMap()
+                deviceMap["identifier"] = result.device.address
+                deviceMap["name"] = result.device.name
+                deviceMap["type"] = result.device.type // Tipo de dispositivo BLE
+                bluetoothScanSink?.success(deviceMap)
             }
         }
-        timer.start()
     }
 }
