@@ -53,8 +53,8 @@ class MethodChannelThermalprinter extends ThermalprinterPlatform {
   }
 
   @override
-  Future<bool> printBluetooth(Uint8List bytes, String identifier) async {
-    final result = await methodChannel.invokeMethod<bool>('printBluetooth', {'bytes': bytes, 'identifier': identifier});
+  Future<bool> printBluetooth(Uint8List bytes, String identifier, {String protocol = 'escpos'}) async {
+    final result = await methodChannel.invokeMethod<bool>('printBluetooth', {'bytes': bytes, 'identifier': identifier, 'protocol': protocol});
     return result ?? false;
   }
 

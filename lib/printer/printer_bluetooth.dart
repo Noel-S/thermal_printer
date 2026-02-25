@@ -7,14 +7,14 @@ import 'package:thermalprinter/thermalprinter.dart';
 class BluetoothPrinter extends Printer {
   String identifier;
   bool _isPrinting = false;
-  BluetoothPrinter._internal({required this.identifier, required super.paperSize, required super.profile, required super.uuid, required super.generator}) {
+  BluetoothPrinter._internal({required this.identifier, required super.paperSize, required super.profile, required super.uuid, required super.generator, super.protocol}) {
     queue.stream.listen((job) async {
       _isPrinting = true;
       // perform print
-      final result = await Thermalprinter().printBluetooth(job.data, identifier);
+      final result = await Thermalprinter().printBluetooth(job.data, identifier, protocol: protocol);
       _printQueue.removeAt(0);
       await Future.delayed(const Duration(milliseconds: 500));
-      job.completer.complete(Future.value(result));
+      job.completer.complete(result);
       _isPrinting = false;
       if (_printQueue.isNotEmpty) {
         queue.add(_printQueue[0]);
@@ -24,12 +24,13 @@ class BluetoothPrinter extends Printer {
     });
   }
 
-  factory BluetoothPrinter({required String identifier, required PaperSize paperSize, required CapabilityProfile profile, int spaceBetweenRows = 5}) {
+  factory BluetoothPrinter({required String identifier, required PaperSize paperSize, required CapabilityProfile profile, int spaceBetweenRows = 5, String protocol = 'escpos'}) {
     return BluetoothPrinter._internal(
       identifier: identifier,
       paperSize: paperSize,
       profile: profile,
       uuid: identifier,
+      protocol: protocol,
       generator: Generator(paperSize, profile, spaceBetweenRows: spaceBetweenRows),
     );
   }
@@ -57,54 +58,11 @@ class BluetoothPrinter extends Printer {
   }
 
   @override
-  Future<bool> isBusy() {
-    // TODO: implement isBusy
-    throw UnimplementedError();
-  }
+  Future<bool> isBusy() async => _isPrinting;
 
   @override
-  Future<bool> isConnected() {
-    // TODO: implement isConnected
-    throw UnimplementedError();
-  }
+  Future<bool> isConnected() async => true;
 
   @override
-  Future<bool> reset() {
-    // TODO: implement reset
-    throw UnimplementedError();
-  }
-
-  // @override
-  // Future<bool> connect() async {
-  //   try {
-  //     socket = await Socket.connect(host, port, timeout: const Duration(seconds: 10));
-  //     return true;
-  //   } catch (e) {
-  //     return false;
-  //   }
-  // }
-
-  // @override
-  // Future<bool> disconnect() async {
-  //   socket?.close();
-  //   socket = null;
-  //   return true;
-  // }
-
-  // @override
-  // Future<bool> isBusy() {
-  //   // TODO: implement isConnected
-  //   throw UnimplementedError();
-  // }
-
-  // @override
-  // Future<bool> isConnected() {
-  //   return Future.value(socket != null);
-  // }
-
-  // @override
-  // Future<bool> reset() {
-  //   // TODO: implement isConnected
-  //   throw UnimplementedError();
-  // }
+  Future<bool> reset() async => true;
 }

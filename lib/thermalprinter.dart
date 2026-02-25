@@ -1,7 +1,5 @@
 import 'dart:typed_data';
-
 import 'package:thermalprinter/printer/device.dart';
-
 import 'thermalprinter_platform_interface.dart';
 
 class Thermalprinter {
@@ -13,8 +11,8 @@ class Thermalprinter {
     return ThermalprinterPlatform.instance.scan<T>(timeout: timeout);
   }
 
-  Future<bool> printBluetooth(Uint8List bytes, String identifier) {
-    return ThermalprinterPlatform.instance.printBluetooth(bytes, identifier);
+  Future<bool> printBluetooth(Uint8List bytes, String identifier, {String protocol = 'escpos'}) {
+    return ThermalprinterPlatform.instance.printBluetooth(bytes, identifier, protocol: protocol);
   }
 
   Future<bool> connectBluetooth(String identifier) async {

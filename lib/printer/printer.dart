@@ -10,9 +10,10 @@ abstract class Printer {
   final PaperSize paperSize;
   final CapabilityProfile profile;
   final Generator generator;
+  final String protocol;
   final StreamController<PrintJob> queue = StreamController<PrintJob>();
 
-  Printer({required this.uuid, required this.paperSize, required this.profile, required this.generator});
+  Printer({required this.uuid, required this.paperSize, required this.profile, required this.generator, this.protocol = 'escpos'});
 
   Future<bool> send(Uint8List data);
   Future<bool> isBusy();

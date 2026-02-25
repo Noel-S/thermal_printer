@@ -37,7 +37,7 @@ abstract class ThermalprinterPlatform extends PlatformInterface {
     throw UnimplementedError('scan() has not been implemented.');
   }
 
-  Future<bool> printBluetooth(Uint8List bytes, String identifier) {
+  Future<bool> printBluetooth(Uint8List bytes, String identifier, {String protocol = 'escpos'}) {
     throw UnimplementedError('printBluetooth() has not been implemented.');
   }
 

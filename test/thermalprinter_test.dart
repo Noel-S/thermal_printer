@@ -18,7 +18,7 @@ class MockThermalprinterPlatform with MockPlatformInterfaceMixin implements Ther
   }
 
   @override
-  Future<bool> printBluetooth(Uint8List bytes, String identifier) {
+  Future<bool> printBluetooth(Uint8List bytes, String identifier, {String protocol = 'escpos'}) {
     // TODO: implement printBluetooth
     throw UnimplementedError();
   }
