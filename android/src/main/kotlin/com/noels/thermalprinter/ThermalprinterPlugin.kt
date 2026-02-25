@@ -31,6 +31,17 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 
+val tspl80 = """
+SIZE 80 mm,10 mm
+GAP 0 mm,0 mm
+DIRECTION 0
+REFERENCE 0,0
+CLS
+TEXT 10,10,"0",0,1,1,"TSPL OK"
+PRINT 1,1
+
+""".trimIndent().replace("\n", "\r\n").toByteArray(Charsets.US_ASCII)
+
 
 /** ThermalprinterPlugin */
 class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, CoroutineScope {
@@ -63,11 +74,15 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
   override fun onMethodCall(call: MethodCall, result: Result) {
     when (call.method) {
         "status" -> isEnabled(result)
-        "printBluetooth" -> call.argument<String>("identifier")?.let {
-            call.argument<ByteArray>("bytes")?.let { bytes ->
-              Thread {
-                  printBluetooth(it, bytes, result)
-              }.start()
+        "printBluetooth" -> call.argument<String>("identifier")?.let { addr ->
+            val bytes = call.argument<ByteArray>("bytes")
+            val protocol = call.argument<String>("protocol") ?: "escpos"
+            if (bytes != null) {
+                Thread {
+                    printBluetooth(addr, bytes, protocol, result)
+                }.start()
+            } else {
+                result.success(false)
             }
         }
         "connectBluetooth" -> call.argument<String>("identifier")?.let {
@@ -110,55 +125,106 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
         }
     }
 
-  private fun printBluetooth(address: String, data: ByteArray, result: Result) = launch(Dispatchers.IO) {
-    if (bluetoothManager.adapter == null) {
-        withContext(Dispatchers.Main) {
-            Log.e("BLUETOOTH_PRINTER", "The current device doesn't support bluetooth connectivity.")
-            result.success(false)
+    private fun printBluetooth(
+        address: String,
+        data: ByteArray,
+        protocol: String,
+        result: Result
+    ) = launch(Dispatchers.IO) {
+
+        val adapter = bluetoothManager.adapter ?: run {
+            withContext(Dispatchers.Main) { result.success(false) }
+            return@launch
         }
-        return@launch
+
+        // ---- LOGS: payload + tail preview (verifica que venga PRINT) ----
+        Log.d("BT_PRINT", "addr=$address protocol=$protocol bytes=${data.size}")
+        run {
+            val tailLen = minOf(160, data.size)
+            val tail = data.copyOfRange(data.size - tailLen, data.size)
+            val tailAscii = String(tail, Charsets.US_ASCII)
+                .replace("\r", "\\r")
+                .replace("\n", "\\n")
+            Log.d("BT_PRINT", "tailAscii=$tailAscii")
+        }
+
+        val t0 = System.currentTimeMillis()
+
+        try {
+            val device: BluetoothDevice = adapter.getRemoteDevice(address)
+            val socket =
+                try { device.createInsecureRfcommSocketToServiceRecord(serialUUID) }
+                catch (_: Exception) { device.createRfcommSocketToServiceRecord(serialUUID) }
+
+            Log.d("BT_PRINT", "t=0 connect start")
+            adapter.cancelDiscovery()
+            socket.connect()
+            Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} connected")
+
+            val os = socket.outputStream
+
+            Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} writing start")
+            when (protocol.lowercase()) {
+                "tspl" -> {
+                    writeInChunks(os, data, 512)
+                }
+                else -> {
+                    val initCommand = byteArrayOf(0x1B, 0x40)
+                    writeInChunks(os, initCommand, 512)
+                    writeInChunks(os, data, 512)
+                }
+            }
+            Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} writing done")
+
+            // OJO: writeInChunks ya hace flush, esto es extra pero OK.
+            try { os.flush() } catch (_: Exception) {}
+            Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} flush() done")
+
+            val kb = (data.size / 1024.0)
+            val waitMs = (kb * 10).toLong().coerceIn(300, 2500)
+            Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} sleeping waitMs=$waitMs (kb=%.2f)".format(kb))
+            try { Thread.sleep(waitMs) } catch (_: Exception) {}
+
+            Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} closing socket")
+            try { socket.close() } catch (_: Exception) {}
+            Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} done")
+
+            withContext(Dispatchers.Main) { result.success(true) }
+        } catch (e: Exception) {
+            Log.e("BLUETOOTH_PRINTER", "Print failed: ${e.message}", e)
+            withContext(Dispatchers.Main) { result.success(false) }
+        }
     }
-    try {
-//      val socket = getOrCreateSocket(address);
-        val device: BluetoothDevice = bluetoothManager.adapter.getRemoteDevice(address)
-        val socket = device.createRfcommSocketToServiceRecord(serialUUID)
-        socket.connect()
 
-        val initCommand = byteArrayOf(0x1B, 0x40) // Reset printer
-        socket.outputStream.apply {
-            write(initCommand)
-            write(data)
-            flush()
-        }
-        readAcknowledgment(socket.inputStream)
-//        val printAcknowledgment = readAcknowledgment(socket.inputStream)
-//        if (!printAcknowledgment) {
-//            withContext(Dispatchers.Main) {
-//                result.success(false)
-//            }
-//            return@launch
-//        }
-        delay(600)
-        socket.outputStream.flush()
-        socket.outputStream.close()
-        socket.close()
+    private fun writeInChunks(
+        os: java.io.OutputStream,
+        data: ByteArray,
+        chunkSize: Int = 512
+    ) {
+        val total = data.size
+        var offset = 0
+        var lastLogOffset = 0
+        val t0 = System.currentTimeMillis()
 
-        //bluetoothDevicesHash.remove(address)
-        withContext(Dispatchers.Main) {
-            //delay(1000)
-            result.success(true)
+        Log.d("BT_CHUNK", "start total=$total chunkSize=$chunkSize")
+
+        while (offset < total) {
+            val end = minOf(offset + chunkSize, total)
+            os.write(data, offset, end - offset)
+            offset = end
+
+            // ---- LOGS: progreso cada ~4KB (o al final) ----
+            if (offset - lastLogOffset >= 4096 || offset == total) {
+                Log.d("BT_CHUNK", "sent=$offset/$total t=${System.currentTimeMillis() - t0}ms")
+                lastLogOffset = offset
+            }
+
+            try { Thread.sleep(2) } catch (_: Exception) {}
         }
-    } catch (e: Exception) {
-        Log.e("BLUETOOTH_PRINTER", e.message.orEmpty())
-        withContext(Dispatchers.Main) {
-            //Log.e("BLUETOOTH_PRINTER", e.message.orEmpty())
-            result.success(false)
-        }
-        // result.error("EXCEPTION", e.message, e.localizedMessage)
+
+        os.flush()
+        Log.d("BT_CHUNK", "flush done total=$total t=${System.currentTimeMillis() - t0}ms")
     }
-  }
-
-
 
     private suspend fun readAcknowledgment(inputStream: InputStream):Boolean {
         val buffer = ByteArray(1024) // Buffer for storing incoming bytes
