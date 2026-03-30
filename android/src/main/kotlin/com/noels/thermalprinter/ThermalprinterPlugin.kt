@@ -31,20 +31,19 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 
-val tspl80 = """
-SIZE 80 mm,10 mm
-GAP 0 mm,0 mm
-DIRECTION 0
-REFERENCE 0,0
-CLS
-TEXT 10,10,"0",0,1,1,"TSPL OK"
-PRINT 1,1
-
-""".trimIndent().replace("\n", "\r\n").toByteArray(Charsets.US_ASCII)
-
-
 /** ThermalprinterPlugin */
 class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, CoroutineScope {
+
+    private val tspl80 = """
+        SIZE 80 mm,10 mm
+        GAP 0 mm,0 mm
+        DIRECTION 0
+        REFERENCE 0,0
+        CLS
+        TEXT 10,10,"0",0,1,1,"TSPL OK"
+        PRINT 1,1
+    """.trimIndent().replace("\n", "\r\n").toByteArray(Charsets.US_ASCII)
+
     private lateinit var context: Context
     private lateinit var job: Job
   private val serialUUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
