@@ -170,13 +170,18 @@ class ThermalprinterPlugin: FlutterPlugin, MethodCallHandler, StreamHandler, Cor
                 }
                 else -> {
                     val initCommand = byteArrayOf(0x1B, 0x40)
-                    writeInChunks(os, initCommand, 512)
-                    writeInChunks(os, data, 512)
+                    socket.outputStream.apply {
+                        write(initCommand)
+                        write(data)
+                        flush()
+                    }
+                    // val initCommand = byteArrayOf(0x1B, 0x40)
+                    // writeInChunks(os, initCommand, 512)
+                    // writeInChunks(os, data, 512)
                 }
             }
             Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} writing done")
 
-            // OJO: writeInChunks ya hace flush, esto es extra pero OK.
             try { os.flush() } catch (_: Exception) {}
             Log.d("BT_PRINT", "t=${System.currentTimeMillis() - t0} flush() done")
 
